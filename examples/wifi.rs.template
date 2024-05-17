@@ -1,0 +1,2 @@
+const wifi_ssid: &str = "my_wifi_ssid";
+const wifi_password: &str = "my_wifi_password";

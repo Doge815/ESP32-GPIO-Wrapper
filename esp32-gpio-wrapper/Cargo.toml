@@ -1,0 +1,27 @@
+[package]
+name = "esp32-gpio-wrapper"
+version = "0.1.0"
+authors = ["Doge815 <42283470+Doge815@users.noreply.github.com>"]
+edition = "2021"
+resolver = "2"
+rust-version = "1.77.0"
+repository = "https://github.com/Doge815/ESP32-GPIO-Wrapper"
+description = "Wrapper around the ESP32 GPIO pins"
+license = "GPL-3.0-or-later"
+
+[features]
+default = ["std", "embassy", "esp-idf-svc/native"]
+
+pio = ["esp-idf-svc/pio"]
+std = ["alloc", "esp-idf-svc/binstart", "esp-idf-svc/std"]
+alloc = ["esp-idf-svc/alloc"]
+nightly = ["esp-idf-svc/nightly"]
+experimental = ["esp-idf-svc/experimental"]
+embassy = ["esp-idf-svc/embassy-sync", "esp-idf-svc/critical-section", "esp-idf-svc/embassy-time-driver"]
+
+[dependencies]
+esp-idf-svc = { version = "0.48", default-features = false }
+tokio = { version = "1.37.0", features = ["sync", "rt", "net", "io-util", "time"] }
+
+[build-dependencies]
+embuild = "0.31.3"
