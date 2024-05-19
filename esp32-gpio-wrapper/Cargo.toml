@@ -22,6 +22,7 @@ embassy = ["esp-idf-svc/embassy-sync", "esp-idf-svc/critical-section", "esp-idf-
 [dependencies]
 esp-idf-svc = { version = "0.48", default-features = false }
 tokio = { version = "1.37.0", features = ["sync", "rt", "net", "io-util", "time"] }
+async-trait = "0.1.80"
 
 [build-dependencies]
 embuild = "0.31.3"

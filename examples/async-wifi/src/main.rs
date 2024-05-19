@@ -1,3 +1,4 @@
+use esp32_gpio_wrapper::GpioWrapper;
 use esp_idf_svc::eventloop::EspSystemEventLoop;
 use esp_idf_svc::hal::prelude::Peripherals;
 use esp_idf_svc::nvs::EspDefaultNvsPartition;
@@ -5,7 +6,6 @@ use esp_idf_svc::sys::{esp, EspError};
 use esp_idf_svc::timer::EspTaskTimerService;
 use esp_idf_svc::wifi::{AsyncWifi, ClientConfiguration, Configuration, EspWifi};
 use log::info;
-use esp32_gpio_wrapper::GpioWrapper;
 
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/../wifi.rs"));
 
@@ -43,9 +43,9 @@ fn main() -> anyhow::Result<()> {
             wifi_loop.initial_connect().await?;
 
             info!("Launching ADC output...");
-            let gpio = GpioWrapper::new(peripherals.adc1, None, peripherals.pins);
-
-            tokio::spawn(log_voltage(gpio.clone()));
+            let gpio = GpioWrapper::new(Some(peripherals.adc1), None, peripherals.pins);
+            tokio::spawn(log_voltage_1(gpio.clone()));
+            tokio::spawn(log_voltage_2(gpio.clone()));
 
             info!("Entering main Wi-Fi run loop...");
             wifi_loop.stay_connected().await
@@ -54,9 +54,19 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn log_voltage(gpio: GpioWrapper<'_>) {
+async fn log_voltage_1(gpio: GpioWrapper) {
+    let pin_32 = gpio.get_pin(32).unwrap();
     loop {
-        info!("Voltage 32: {}; Voltage 33: {}", gpio.get_adc(32).await.unwrap(), gpio.get_adc(33).await.unwrap());
+        info!("32: {}", pin_32.get_adc().await.unwrap());
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+    }
+}
+
+async fn log_voltage_2(gpio: GpioWrapper) {
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    let pin_33 = gpio.get_pin(33).unwrap();
+    loop {
+        info!( "33: {}", pin_33.get_adc().await.unwrap());
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     }
 }

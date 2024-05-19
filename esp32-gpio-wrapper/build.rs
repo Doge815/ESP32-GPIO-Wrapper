@@ -1,6 +1,3 @@
-/*fn main() {
-    embuild::espidf::sysenv::output();
-}*/
 use std::env;
 use std::fs::OpenOptions;
 use std::io::Write;
@@ -10,67 +7,116 @@ fn main() {
     let out_dir = env::var_os("OUT_DIR").unwrap();
     let dest_path = Path::new(&out_dir).join("adc.rs");
 
-let mut file = OpenOptions::new()
+    let mut file = OpenOptions::new()
         .create(true)
-        .append(false)
+        .truncate(true)
         .write(true)
         .open(dest_path.clone())
         .unwrap();
 
-    for adc1_pin in 32..40 { //pins 37 and 38 don't exist
+
+    const ADC1_PINS: [i32; 8] = [32, 33, 34, 35, 36, 37, 38, 39];
+    const ADC2_PINS: [i32; 9] = [2, 4, 12, 13, 14, 15, 25, 26, 27];
+    const NON_EXISTENT_PINS: [i32; 6] = [20, 24, 28, 29, 30, 31];
+
+    for pin in 0..40 {
+        if NON_EXISTENT_PINS.contains(&pin) {
+            continue;
+        }
+
+        let adc = if ADC1_PINS.contains(&pin) {
+            1
+        } else if ADC2_PINS.contains(&pin) {
+            2
+        } else {
+            0
+        };
+
+        let used_adc_driver = match adc {
+            1 => "adc1_driver",
+            2 => "adc2_driver",
+            _ => "",
+        };
+
         file.write(
-            format!("
-struct Adc1Gpio{pin}<'a> {{
-    adc_pin: AdcChannelDriver<'a, {{ esp_idf_svc::hal::adc::attenuation::DB_11 }}, Gpio{pin}>,
+            format!(
+                "
+struct GpioPin{pin}<'a> {{
+    pin: Option<Gpio{pin}>,
+    adc1_driver: Arc<Mutex<Option<AdcDriver<'a, hal::adc::ADC1>>>>,
+    adc2_driver: Arc<Mutex<Option<AdcDriver<'a, hal::adc::ADC2>>>>,
 }}
 
-impl Adc1Gpio{pin}<'_> {{
-    pub fn new(pin: Gpio{pin}) -> Self {{
-        let adc_pin: AdcChannelDriver<{{ esp_idf_svc::hal::adc::attenuation::DB_11 }}, Gpio{pin}> =
-            esp_idf_svc::hal::adc::AdcChannelDriver::new(pin).unwrap();
-        Adc1Gpio{pin} {{ adc_pin }}
+impl<'a> GpioPin{pin}<'a> {{
+    fn new(
+        pin: Gpio{pin},
+        adc1_driver: Arc<Mutex<Option<AdcDriver<'a, hal::adc::ADC1>>>>,
+        adc2_driver: Arc<Mutex<Option<AdcDriver<'a, hal::adc::ADC2>>>>,
+    ) -> Self {{
+        GpioPin{pin} {{
+            pin: Some(pin),
+            adc1_driver,
+            adc2_driver,
+        }}
     }}
 }}
 
-unsafe impl Send for Adc1Gpio{pin}<'_> {{}}
-unsafe impl Sync for Adc1Gpio{pin}<'_> {{}}
+unsafe impl Send for GpioPin{pin}<'_> {{}}
+unsafe impl Sync for GpioPin{pin}<'_> {{}}
 
-impl<'a> Adc1PinWrapper for Adc1Gpio{pin}<'a> {{
-    fn get_adc(&mut self, driver: &mut AdcDriver<'_, esp_idf_svc::hal::adc::ADC1>) -> u16 {{
-        driver.read(&mut self.adc_pin).unwrap()
-    }}
-}}
-
-", pin = adc1_pin).as_bytes(),
+#[async_trait]
+impl GpioPin for GpioPin{pin}<'_> {{
+    async fn get_adc(&mut self) -> Result<u16, GpioWrapperError> {{
+",
+                pin = pin,
+            )
+            .as_bytes(),
         )
         .unwrap();
-    }
 
-    for adc2_pin in [2, 4, 12, 13, 14, 15, 25, 26, 27] {
+        if adc != 0 {
+            file.write(
+            format!(
+                "
+        if self.pin.is_some() {{
+            let pin = self.pin.as_mut().unwrap();
+            let mut adc_driver = self.{used_adc_driver}.lock().await;
+            if adc_driver.is_some() {{
+                let mut adc_channel_driver: AdcChannelDriver<
+                    {{ hal::adc::attenuation::DB_11 }},
+                    Gpio{pin},
+                > = AdcChannelDriver::new((pin).into_ref()).unwrap();
+                let readout = adc_driver
+                    .as_mut()
+                    .unwrap()
+                    .read(&mut adc_channel_driver)
+                    .map_err(GpioWrapperError::from);
+                return readout;
+            }}
+            return Err(GpioWrapperError::AdcNotOwned);
+        }}
+        Err(GpioWrapperError::PinNotOwned)
+",
+    ).as_bytes()).unwrap();
+        } else {
+            file.write(
+                format!(
+                    "
+        Err(GpioWrapperError::NotAnAdcPin)
+",
+                )
+                .as_bytes(),
+            )
+            .unwrap();
+        }
         file.write(
-            format!("
-struct Adc2Gpio{pin}<'a> {{
-    adc_pin: AdcChannelDriver<'a, {{ esp_idf_svc::hal::adc::attenuation::DB_11 }}, Gpio{pin}>,
-}}
-
-impl Adc2Gpio{pin}<'_> {{
-    pub fn new(pin: Gpio{pin}) -> Self {{
-        let adc_pin: AdcChannelDriver<{{ esp_idf_svc::hal::adc::attenuation::DB_11 }}, Gpio{pin}> =
-            esp_idf_svc::hal::adc::AdcChannelDriver::new(pin).unwrap();
-        Adc2Gpio{pin} {{ adc_pin }}
+            format!(
+                "
     }}
 }}
-
-unsafe impl Send for Adc2Gpio{pin}<'_> {{}}
-unsafe impl Sync for Adc2Gpio{pin}<'_> {{}}
-
-impl<'a> Adc2PinWrapper for Adc2Gpio{pin}<'a> {{
-    fn get_adc(&mut self, driver: &mut AdcDriver<'_, esp_idf_svc::hal::adc::ADC2>) -> u16 {{
-        driver.read(&mut self.adc_pin).unwrap()
-    }}
-}}
-
-", pin = adc2_pin).as_bytes(),
+",
+            )
+            .as_bytes(),
         )
         .unwrap();
     }
