@@ -1,11 +1,11 @@
-use esp32_gpio_wrapper::GpioWrapper;
+use esp32_gpio_wrapper::{GpioWrapper, MeasurementConfig};
 use esp_idf_svc::eventloop::EspSystemEventLoop;
 use esp_idf_svc::hal::prelude::Peripherals;
 use esp_idf_svc::nvs::EspDefaultNvsPartition;
 use esp_idf_svc::sys::{esp, EspError};
 use esp_idf_svc::timer::EspTaskTimerService;
 use esp_idf_svc::wifi::{AsyncWifi, ClientConfiguration, Configuration, EspWifi};
-use log::info;
+use log::{info, warn};
 
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/../wifi.rs"));
 
@@ -56,17 +56,29 @@ fn main() -> anyhow::Result<()> {
 
 async fn log_voltage_1(gpio: GpioWrapper) {
     let pin_32 = gpio.get_pin(32).unwrap();
+    let measurement = MeasurementConfig {
+        to_measure: 64,
+        attenuation: esp32_gpio_wrapper::Attenuation::DB11,
+    };
     loop {
-        info!("32: {}", pin_32.get_adc().await.unwrap());
+        let adc = pin_32.get_adc_averaged(measurement.clone()).await.unwrap();
+
+        info!("32: {adc}");
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     }
 }
 
 async fn log_voltage_2(gpio: GpioWrapper) {
-    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
     let pin_33 = gpio.get_pin(33).unwrap();
+    let measurement = MeasurementConfig {
+        to_measure: 64,
+        attenuation: esp32_gpio_wrapper::Attenuation::DB11,
+    };
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
     loop {
-        info!( "33: {}", pin_33.get_adc().await.unwrap());
+        let adc = pin_33.get_adc_averaged(measurement.clone()).await.unwrap();
+
+        info!("33: {adc}");
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     }
 }
