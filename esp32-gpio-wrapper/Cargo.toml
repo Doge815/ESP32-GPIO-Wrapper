@@ -1,6 +1,6 @@
 [package]
 name = "esp32-gpio-wrapper"
-version = "0.3.0"
+version = "0.4.0"
 authors = ["Doge815 <42283470+Doge815@users.noreply.github.com>"]
 edition = "2021"
 resolver = "2"
@@ -23,6 +23,7 @@ embassy = ["esp-idf-svc/embassy-sync", "esp-idf-svc/critical-section", "esp-idf-
 esp-idf-svc = { version = "0.48", default-features = false }
 tokio = { version = "1.37.0", features = ["sync", "rt", "net", "io-util", "time"] }
 async-trait = "0.1.80"
+downcast-rs = "1.2.1"
 
 [build-dependencies]
 embuild =  { version = "0.32.0", features = ["espidf"]}

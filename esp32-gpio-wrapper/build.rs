@@ -141,9 +141,15 @@ fn main() {
             file,
             "
 struct GpioPin{pin}<'a> {{
-    pin: Option<Gpio{pin}>,
+    pub(crate) pin: Gpio{pin},
     adc1_driver: Arc<Mutex<Option<AdcDriver<'a, hal::adc::ADC1>>>>,
     adc2_driver: Arc<Mutex<Option<AdcDriver<'a, hal::adc::ADC2>>>>,
+}}
+
+impl Debug for GpioPin{pin}<'static> {{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {{
+        todo!()
+    }}
 }}
 
 impl<'a> GpioPin{pin}<'a> {{
@@ -153,7 +159,7 @@ impl<'a> GpioPin{pin}<'a> {{
         adc2_driver: Arc<Mutex<Option<AdcDriver<'a, hal::adc::ADC2>>>>,
     ) -> Self {{
         GpioPin{pin} {{
-            pin: Some(pin),
+            pin,
             adc1_driver,
             adc2_driver,
         }}
@@ -164,20 +170,18 @@ unsafe impl Send for GpioPin{pin}<'_> {{}}
 unsafe impl Sync for GpioPin{pin}<'_> {{}}
 
 #[async_trait]
-impl GpioPin for GpioPin{pin}<'_> {{"
+impl GpioPin for GpioPin{pin}<'static> {{"
         );
 
         if *adc != ADC::NOADC {
             print!(file, "
     async fn get_adc(&mut self) -> Result<u16, GpioWrapperError> {{
-        if self.pin.is_some() {{
-            let pin = self.pin.as_mut().unwrap();
             let mut adc_driver = self.{adc_driver}.lock().await;
             if adc_driver.is_some() {{
                 let mut adc_channel_driver: AdcChannelDriver<
                     {{ hal::adc::attenuation::DB_11 }},
                     Gpio{pin},
-                > = AdcChannelDriver::new((pin).into_ref()).unwrap();
+                > = AdcChannelDriver::new((&mut self.pin).into_ref()).unwrap();
                 let readout = adc_driver
                     .as_mut()
                     .unwrap()
@@ -186,16 +190,12 @@ impl GpioPin for GpioPin{pin}<'_> {{"
                 return readout;
             }}
             return Err(GpioWrapperError::AdcNotOwned);
-        }}
-        Err(GpioWrapperError::PinNotOwned)
     }}
 
     async fn get_adc_averaged( &mut self, measurement: MeasurementConfig) -> Result<f32, GpioWrapperError> {{
         if measurement.to_measure == 0 {{
             return Ok(f32::NAN);
         }}
-        if self.pin.is_some() {{
-            let pin = self.pin.as_mut().unwrap();
             let mut adc_driver = self.{adc_driver}.lock().await;
             if adc_driver.is_some() {{
                 fn helper<const N: u32>(
@@ -222,23 +222,21 @@ impl GpioPin for GpioPin{pin}<'_> {{"
 
                 match measurement.attenuation {{
                     Attenuation::DB0 => {{
-                        return helper::<DB_0>(pin, &mut adc_driver, measurement);
+                        return helper::<DB_0>(&mut self.pin, &mut adc_driver, measurement);
                         //cannot use the constant directly, wtf rust???
                     }}
                     Attenuation::DB2_5 => {{
-                        return helper::<DB_2_5>(pin, &mut adc_driver, measurement);
+                        return helper::<DB_2_5>(&mut self.pin, &mut adc_driver, measurement);
                     }}
                     Attenuation::DB6 => {{
-                        return helper::<DB_6>(pin, &mut adc_driver, measurement);
+                        return helper::<DB_6>(&mut self.pin, &mut adc_driver, measurement);
                     }}
                     Attenuation::DB11 => {{
-                        return helper::<DB_11>(pin, &mut adc_driver, measurement);
+                        return helper::<DB_11>(&mut self.pin, &mut adc_driver, measurement);
                     }}
                 }}
             }}
             return Err(GpioWrapperError::AdcNotOwned);
-        }}
-        Err(GpioWrapperError::PinNotOwned)
     }}
 "
             );
@@ -295,6 +293,31 @@ fn pins_vec(adc1: Option<ADC1>, adc2: Option<ADC2>, pins: Pins) -> Vec<Arc<Mutex
         file,
         "
     ]
+}}
+
+impl GpioWrapper {{
+    "
+    );
+    for (pin, _) in pins.iter() {
+        print!(
+            file,
+            "
+    pub async fn release_pin{pin}(&mut self) -> Result<Gpio{pin}, GpioWrapperError> {{
+        let wrapper = self.get_pin({pin}).unwrap();
+        let mut pin = wrapper.pin.lock().await;
+        return if let Some(boxed) = pin.take() {{
+            let x: Box<GpioPin{pin}> = boxed.downcast().unwrap();
+            Ok(x.pin)
+        }} else {{
+            Err(GpioWrapperError::PinNotOwned)
+        }}
+    }}
+    "
+        );
+    }
+    print!(
+        file,
+        "
 }}
     "
     );

@@ -1,5 +1,6 @@
 #![allow(dead_code, unused_variables)]
 use async_trait::async_trait;
+use downcast_rs::{impl_downcast, Downcast};
 use core::fmt;
 use esp_idf_svc::{
     hal::{
@@ -10,7 +11,7 @@ use esp_idf_svc::{
     },
     sys::EspError,
 };
-use std::sync::Arc;
+use std::{fmt::Debug, sync::Arc};
 use tokio::sync::Mutex;
 
 #[derive(Debug, Clone)]
@@ -54,13 +55,14 @@ impl From<EspError> for GpioWrapperError {
 }
 
 #[async_trait]
-trait GpioPin: Send + Sync {
+trait GpioPin: Send + Sync + Downcast + Debug {
     async fn get_adc(&mut self) -> Result<u16, GpioWrapperError>;
     async fn get_adc_averaged(
         &mut self,
         measurement: MeasurementConfig,
     ) -> Result<f32, GpioWrapperError>;
 }
+impl_downcast!(GpioPin);
 
 #[derive(Clone, Debug)]
 pub enum Attenuation {
@@ -125,3 +127,16 @@ impl GpioWrapper {
         })
     }
 }
+
+/*impl GpioWrapper {
+    pub async fn release_pin0(&mut self) -> Result<Gpio0, GpioWrapperError> {
+        let wrapper = self.get_pin(0).unwrap();
+        let mut pin = wrapper.pin.lock().await;
+        return if let Some(boxed) = pin.take() {
+            let x: Box<GpioPin0> = boxed.downcast().unwrap();
+            Ok(x.pin)
+        } else {
+            Err(GpioWrapperError::PinNotOwned)
+        }
+    }
+}*/
